@@ -5,9 +5,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'django-insecure-*2y$m-t!@tk+d^b04+nh4otfnnxybl-$=1m84xytj37=z$gnaf'
 
-DEBUG = True
+DEBUG = False  # ✅ Set to False for production
 
-ALLOWED_HOSTS = ['*']  # Or your render.com domain like: ['expenzo.onrender.com']
+ALLOWED_HOSTS = ['expenzo-tg6u.onrender.com']  # ✅ Replace with your Render domain
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -71,20 +71,18 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
 USE_TZ = True
 
-# ✅ Static Files Configuration for Render
+# ✅ Static files for Render
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'tracker', 'static')]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# ✅ Email Configuration
+# ✅ Email setup (Optional, used for password reset)
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
