@@ -1,27 +1,15 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
-from django.contrib.auth.hashers import make_password, check_password
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.models import User
 from django.db.models import Sum
 from django.core.paginator import Paginator
 from django.core.mail import send_mail
 from django.http import HttpResponse
-from datetime import date, timedelta
-from .models import Signup, Expense, Category
+from datetime import date
+from .models import Expense, Category
 from .forms import ExpenseForm
 import csv
-
-# ---------- Session Helpers ----------
-
-def homepage(request):
-    return render(request, 'tracker/home.html') 
-
-def is_logged_in(request):
-    return 'user_id' in request.session
-
-def get_logged_user(request):
-    if is_logged_in(request):
-        return Signup.objects.get(id=request.session['user_id'])
-    return None
 
 # ---------- Auth Views ----------
 
@@ -36,21 +24,16 @@ def register_view(request):
             messages.error(request, "Passwords do not match.")
             return redirect('signup')
 
-        if Signup.objects.filter(username=username).exists():
+        if User.objects.filter(username=username).exists():
             messages.error(request, "Username already exists.")
             return redirect('signup')
 
-        if Signup.objects.filter(email=email).exists():
+        if User.objects.filter(email=email).exists():
             messages.error(request, "Email already in use.")
             return redirect('signup')
 
-        Signup.objects.create(
-            username=username,
-            email=email,
-            password=make_password(password)
-        )
+        user = User.objects.create_user(username=username, email=email, password=password)
 
-        # ✅ Send email after successful signup
         send_mail(
             subject='Welcome to Expenzo 🎉',
             message=f'Hi {username},\n\nThank you for signing up for Expenzo!\nStart managing your expenses smarter today.',
@@ -65,58 +48,51 @@ def register_view(request):
     return render(request, 'tracker/signup.html')
 
 
-
 def login_view(request):
     if request.method == 'POST':
         username = request.POST.get('username')
         password = request.POST.get('password')
+        user = authenticate(request, username=username, password=password)
 
-        try:
-            user = Signup.objects.get(username=username)
-            if check_password(password, user.password):
-                request.session['user_id'] = user.id
-                request.session['username'] = user.username
-                messages.success(request, "Login successful.")
-
-                
-
-                return redirect('main_page')
-            else:
-                messages.error(request, "Incorrect password.")
-        except Signup.DoesNotExist:
-            messages.error(request, "User not found.")
+        if user is not None:
+            login(request, user)
+            messages.success(request, "Login successful.")
+            return redirect('main_page')
+        else:
+            messages.error(request, "Invalid username or password.")
 
     return render(request, 'tracker/login.html')
 
 
 def logout_view(request):
-    request.session.flush()
+    logout(request)
     return redirect('login')
 
 # ---------- Main Pages ----------
 
+def homepage(request):
+    return render(request, 'tracker/home.html') 
+
 def main_page_view(request):
-    if not is_logged_in(request):
+    if not request.user.is_authenticated:
         return redirect('login')
-    username = request.session.get('username')
-    return render(request, 'tracker/main_page.html', {'username': username})
+    return render(request, 'tracker/main_page.html', {'username': request.user.username})
 
 
 def dashboard_view(request):
-    if not is_logged_in(request):
+    if not request.user.is_authenticated:
         return redirect('login')
     return render(request, 'tracker/dashboard.html')
 
 # ---------- Expenses ----------
 
 def add_expense(request):
-    if not is_logged_in(request):
+    if not request.user.is_authenticated:
         return redirect('login')
-    user = get_logged_user(request)
     form = ExpenseForm(request.POST or None)
     if form.is_valid():
         expense = form.save(commit=False)
-        expense.user = user
+        expense.user = request.user
         expense.save()
         messages.success(request, "Expense added.")
         return redirect('add_expense')
@@ -124,10 +100,9 @@ def add_expense(request):
 
 
 def view_expenses(request):
-    if not is_logged_in(request):
+    if not request.user.is_authenticated:
         return redirect('login')
-    user = get_logged_user(request)
-    expenses = Expense.objects.filter(user=user).order_by('-date')
+    expenses = Expense.objects.filter(user=request.user).order_by('-date')
     categories = Category.objects.all()
 
     q = request.GET.get('q')
@@ -156,11 +131,10 @@ def view_expenses(request):
 
 
 def edit_expense(request, expense_id):
-    if not is_logged_in(request):
+    if not request.user.is_authenticated:
         return redirect('login')
-    user = get_logged_user(request)
     try:
-        expense = Expense.objects.get(id=expense_id, user=user)
+        expense = Expense.objects.get(id=expense_id, user=request.user)
     except Expense.DoesNotExist:
         messages.error(request, "Expense not found.")
         return redirect('view_expenses')
@@ -175,11 +149,10 @@ def edit_expense(request, expense_id):
 
 
 def delete_expense(request, expense_id):
-    if not is_logged_in(request):
+    if not request.user.is_authenticated:
         return redirect('login')
-    user = get_logged_user(request)
     try:
-        expense = Expense.objects.get(id=expense_id, user=user)
+        expense = Expense.objects.get(id=expense_id, user=request.user)
         expense.delete()
         messages.success(request, "Expense deleted.")
     except Expense.DoesNotExist:
@@ -202,10 +175,9 @@ def add_category_view(request):
 # ---------- Summary ----------
 
 def summary_view(request):
-    if not is_logged_in(request):
+    if not request.user.is_authenticated:
         return redirect('login')
-    user = get_logged_user(request)
-    expenses = Expense.objects.filter(user=user)
+    expenses = Expense.objects.filter(user=request.user)
 
     total_all = expenses.aggregate(Sum('amount'))['amount__sum'] or 0
     today = date.today()
@@ -223,10 +195,9 @@ def summary_view(request):
 # ---------- CSV Export ----------
 
 def export_expenses_csv(request):
-    if not is_logged_in(request):
+    if not request.user.is_authenticated:
         return redirect('login')
-    user = get_logged_user(request)
-    expenses = Expense.objects.filter(user=user).order_by('-date')
+    expenses = Expense.objects.filter(user=request.user).order_by('-date')
 
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="expenses.csv"'
@@ -241,39 +212,39 @@ def export_expenses_csv(request):
 # ---------- Profile ----------
 
 def profile_view(request):
-    if not is_logged_in(request):
+    if not request.user.is_authenticated:
         return redirect('login')
-    user = get_logged_user(request)
 
     if request.method == 'POST':
         new_password = request.POST.get('new_password')
         confirm_password = request.POST.get('confirm_password')
 
         if new_password and new_password == confirm_password:
-            user.password = make_password(new_password)
-            user.save()
+            request.user.set_password(new_password)
+            request.user.save()
             messages.success(request, "Password updated successfully.")
         else:
             messages.error(request, "Passwords do not match.")
 
-    return render(request, 'tracker/profile.html', {'user': user})
+    return render(request, 'tracker/profile.html', {'user': request.user})
 
 # ---------- Admin Dashboard ----------
 
 def admin_dashboard_view(request):
-    if not is_logged_in(request):
+    if not request.user.is_authenticated:
         return redirect('login')
-    user = get_logged_user(request)
-    if not user.is_admin:
+    if not request.user.is_staff:
         messages.error(request, "You are not authorized to view this page.")
         return redirect('main_page')
 
-    total_users = Signup.objects.count()
+    total_users = User.objects.count()
     total_expenses = Expense.objects.count()
     total_amount = Expense.objects.aggregate(Sum('amount'))['amount__sum'] or 0
+    users = User.objects.all().order_by('id')
 
     return render(request, 'tracker/admin_dashboard.html', {
         'total_users': total_users,
         'total_expenses': total_expenses,
         'total_amount': total_amount,
+        'users': users,
     })

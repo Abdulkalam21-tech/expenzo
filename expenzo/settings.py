@@ -5,7 +5,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'django-insecure-*2y$m-t!@tk+d^b04+nh4otfnnxybl-$=1m84xytj37=z$gnaf'
 
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = ['*']  # Or your render.com domain like: ['expenzo.onrender.com']
 

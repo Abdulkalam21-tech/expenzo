@@ -68,7 +68,13 @@
 <div class="login-box">
   <h2 class="text-center text-primary mb-4">Welcome to Expenzo</h2>
 
-  <form method="POST">
+  {% if messages %}
+    {% for msg in messages %}
+      <div class="alert alert-{{ msg.tags }} text-center">{{ msg }}</div>
+    {% endfor %}
+  {% endif %}
+
+  <form method="POST" action="{% url 'login' %}">
     {% csrf_token %}
     <div class="mb-3">
       <input type="text" name="username" class="form-control" placeholder="Username" required>
@@ -82,12 +88,6 @@
   <div class="text-center mt-3">
     <a href="{% url 'signup' %}">Don't have an account? Sign up</a>
   </div>
-
-  {% if messages %}
-    {% for msg in messages %}
-      <div class="alert alert-{{ msg.tags }} mt-3 text-center">{{ msg }}</div>
-    {% endfor %}
-  {% endif %}
 
   <div class="quote mt-4">“Track every rupee. Save more. Live better.”</div>
 </div>
